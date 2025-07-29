@@ -380,7 +380,7 @@ if not df.empty:
 # ## 7. Discussion & Conclusion
 # 
 # ### Project Summary
-# This project successfully demonstrated a complete workflow for classifying complex driving events from raw sensor data. We began by consolidating data from numerous files, performing cleaning and feature engineering, and conducting a thorough exploratory data analysis. We then built, trained, and evaluated three distinct classification models, with the **[Best Model Name from Results]** emerging as the most effective.
+# This project successfully demonstrated a complete workflow for classifying complex driving events from raw sensor data. We began by consolidating data from numerous files, performing cleaning and feature engineering, and conducting a thorough exploratory data analysis. We then built, trained, and evaluated three distinct classification models, with the **Random Forest** emerging as the most effective.
 # 
 # ### Key Findings & Takeaways
 # * **Data Consolidation is Key:** The initial step of mapping messy labels to clean, unified classes was fundamental to the project's success. Consolidating all safe driving events into a single class created a more robust and focused classification problem.
@@ -440,5 +440,3 @@ with open("driving_model.onnx", "wb") as f:
     f.write(onnx_model.SerializeToString())
 
 print("Model exported successfully to driving_model.onnx")
-
-
