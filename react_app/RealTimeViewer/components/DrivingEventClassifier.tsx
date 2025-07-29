@@ -26,8 +26,11 @@ const DrivingEventClassifier: React.FC = () => {
 	const [session, setSession] = useState<InferenceSession | null>(null);
 	const [scalerParams, setScalerParams] = useState<ScalerParams | null>(null);
 	const [isInferenceRunning, setIsInferenceRunning] = useState(false);
-	const [currentResult, setCurrentResult] =
-		useState<ClassificationResult | null>(null);
+	const [currentResult, setCurrentResult] = useState<ClassificationResult>({
+		event: "No event detected",
+		confidence: 0,
+		timestamp: Date.now(),
+	});
 	const [sensorData, setSensorData] = useState({
 		acc: { x: 0, y: 0, z: 0 },
 		gyro: { x: 0, y: 0, z: 0 },
@@ -40,6 +43,7 @@ const DrivingEventClassifier: React.FC = () => {
 	const magnetometerSubscriptionRef = useRef<any>(null);
 	const accelerometerSubscriptionRef = useRef<any>(null);
 	const gyroscopeSubscriptionRef = useRef<any>(null);
+	const isInferenceRunningRef = useRef<boolean>(false);
 
 	// Event class labels
 	const eventLabels = [
@@ -54,22 +58,28 @@ const DrivingEventClassifier: React.FC = () => {
 	useEffect(() => {
 		const loadModel = async () => {
 			try {
-				// Load scaler parameters
-				const scalerAsset = Asset.fromModule(
-					require("@/assets/scaler_params.json")
-				);
-				await scalerAsset.downloadAsync();
-				const scalerResponse = await fetch(scalerAsset.uri);
-				const scalerData: ScalerParams = await scalerResponse.json();
+				console.log("Starting to load model and scaler parameters...");
+
+				// Load scaler parameters directly
+				console.log("Loading scaler parameters...");
+				const scalerData: ScalerParams = require("@/assets/scaler_params.json");
 				setScalerParams(scalerData);
+				console.log("Scaler parameters loaded successfully");
 
 				// Load ONNX model
+				console.log("Loading ONNX model...");
 				const modelAsset = Asset.fromModule(
 					require("@/assets/driving_model.onnx")
 				);
+				console.log("Model asset created:", modelAsset);
 				await modelAsset.downloadAsync();
+				console.log("Model asset downloaded, URI:", modelAsset.uri);
 				const modelResponse = await fetch(modelAsset.uri);
 				const modelArrayBuffer = await modelResponse.arrayBuffer();
+				console.log(
+					"Model array buffer size:",
+					modelArrayBuffer.byteLength
+				);
 
 				const inferenceSession = await InferenceSession.create(
 					modelArrayBuffer
@@ -79,6 +89,7 @@ const DrivingEventClassifier: React.FC = () => {
 				console.log("Model and scaler parameters loaded successfully");
 			} catch (error) {
 				console.error("Error loading model:", error);
+				console.error("Error details:", JSON.stringify(error, null, 2));
 				Alert.alert(
 					"Error",
 					"Failed to load the driving event classification model"
@@ -121,7 +132,17 @@ const DrivingEventClassifier: React.FC = () => {
 
 	// Run inference on current sensor data
 	const runInference = async () => {
-		if (!session || !scalerParams || !isInferenceRunning) return;
+		if (!session || !scalerParams || !isInferenceRunningRef.current) {
+			console.log(
+				"Inference skipped - session:",
+				!!session,
+				"scalerParams:",
+				!!scalerParams,
+				"isRunning:",
+				isInferenceRunningRef.current
+			);
+			return;
+		}
 
 		try {
 			const { accMag, gyroMag, magMag } = calculateMagnitudes(
@@ -149,16 +170,32 @@ const DrivingEventClassifier: React.FC = () => {
 			// Normalize features
 			const normalizedFeatures = normalizeFeatures(features);
 
-			// Prepare input tensor
-			const inputTensor = new Float32Array(normalizedFeatures);
-			const input = {
-				data: inputTensor,
-				dims: [1, normalizedFeatures.length],
-			};
-
-			// Run inference
+			// Prepare input tensors for each feature
 			const feeds: Record<string, any> = {};
-			feeds[session.inputNames[0]] = input;
+			const featureNames = [
+				"acc_x",
+				"acc_y",
+				"acc_z",
+				"gyro_x",
+				"gyro_y",
+				"gyro_z",
+				"mag_x",
+				"mag_y",
+				"mag_z",
+				"AccMag",
+				"GyroMag",
+				"MagMag",
+			];
+
+			featureNames.forEach((featureName, index) => {
+				const inputTensor = new Float32Array([
+					normalizedFeatures[index],
+				]);
+				feeds[featureName] = {
+					data: inputTensor,
+					dims: [1, 1],
+				};
+			});
 
 			const results = await session.run(feeds);
 			const output = results[session.outputNames[0]];
@@ -181,7 +218,11 @@ const DrivingEventClassifier: React.FC = () => {
 
 	// Start sensor subscriptions and inference
 	const startInference = () => {
-		if (isInferenceRunning) return;
+		console.log("Starting inference...");
+		if (isInferenceRunningRef.current) {
+			console.log("Inference already running, skipping start");
+			return;
+		}
 
 		// Set update intervals
 		Magnetometer.setUpdateInterval(50);
@@ -206,13 +247,19 @@ const DrivingEventClassifier: React.FC = () => {
 		});
 
 		// Start inference loop
+		isInferenceRunningRef.current = true;
 		setIsInferenceRunning(true);
 		inferenceIntervalRef.current = setInterval(runInference, 50);
+		console.log("Inference started successfully");
 	};
 
 	// Stop sensor subscriptions and inference
 	const stopInference = () => {
-		if (!isInferenceRunning) return;
+		console.log("Stopping inference...");
+		if (!isInferenceRunningRef.current) {
+			console.log("Inference not running, skipping stop");
+			return;
+		}
 
 		// Clear inference interval
 		if (inferenceIntervalRef.current) {
@@ -236,8 +283,14 @@ const DrivingEventClassifier: React.FC = () => {
 			gyroscopeSubscriptionRef.current = null;
 		}
 
+		isInferenceRunningRef.current = false;
 		setIsInferenceRunning(false);
-		setCurrentResult(null);
+		setCurrentResult({
+			event: "No event detected",
+			confidence: 0,
+			timestamp: Date.now(),
+		});
+		console.log("Inference stopped successfully");
 	};
 
 	// Cleanup on unmount
@@ -258,18 +311,36 @@ const DrivingEventClassifier: React.FC = () => {
 				<Text style={styles.statusText}>
 					Inference: {isInferenceRunning ? "Running" : "Stopped"}
 				</Text>
+				<Text style={styles.statusText}>
+					Scaler Params: {scalerParams ? "Loaded" : "Loading..."}
+				</Text>
+				<Text style={styles.statusText}>
+					Last Update:{" "}
+					{currentResult.timestamp
+						? new Date(currentResult.timestamp).toLocaleTimeString()
+						: "Never"}
+				</Text>
+				<Text style={styles.statusText}>
+					Sensor Subscriptions:{" "}
+					{magnetometerSubscriptionRef.current &&
+					accelerometerSubscriptionRef.current &&
+					gyroscopeSubscriptionRef.current
+						? "Active"
+						: "Inactive"}
+				</Text>
+				<Text style={styles.statusText}>
+					Inference Interval:{" "}
+					{inferenceIntervalRef.current ? "Active" : "Inactive"}
+				</Text>
 			</View>
 
-			{currentResult && (
-				<View style={styles.resultContainer}>
-					<Text style={styles.resultTitle}>Current Event:</Text>
-					<Text style={styles.eventText}>{currentResult.event}</Text>
-					<Text style={styles.confidenceText}>
-						Confidence:{" "}
-						{(currentResult.confidence * 100).toFixed(1)}%
-					</Text>
-				</View>
-			)}
+			<View style={styles.resultContainer}>
+				<Text style={styles.resultTitle}>Current Event:</Text>
+				<Text style={styles.eventText}>{currentResult.event}</Text>
+				<Text style={styles.confidenceText}>
+					Confidence: {(currentResult.confidence * 100).toFixed(1)}%
+				</Text>
+			</View>
 
 			<View style={styles.sensorContainer}>
 				<Text style={styles.sensorTitle}>Sensor Data:</Text>
