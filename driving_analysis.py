@@ -420,16 +420,11 @@ with open('scaler_params.json', 'w') as f:
     json.dump(scaler_params, f)
 print("Scaler parameters saved to scaler_params.json")
 
-# --- 2. Export the Model to ONNX (Corrected Section) ---
-# Create an input type for each column in the training data
-initial_types = []
-for col in X_train.columns:
-    if X_train[col].dtype in ['float64', 'float32', 'int64']:
-        initial_types.append((col, FloatTensorType([None, 1])))
-    elif X_train[col].dtype == 'object':
-        initial_types.append((col, StringTensorType([None, 1])))
+# --- 2. Export the Model to ONNX (Single Tensor Input) ---
+# Create a single input tensor with all features
+initial_types = [('input', FloatTensorType([None, len(X_train.columns)]))]
 
-# Now, the converter knows how to map each input to the pipeline steps
+# Now, the converter knows how to map the single input to the pipeline steps
 onnx_model = skl2onnx.convert_sklearn(
     best_pipeline,
     initial_types=initial_types
@@ -440,3 +435,4 @@ with open("driving_model.onnx", "wb") as f:
     f.write(onnx_model.SerializeToString())
 
 print("Model exported successfully to driving_model.onnx")
+print(f"Model expects input tensor with {len(X_train.columns)} features")

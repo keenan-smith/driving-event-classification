@@ -194,27 +194,46 @@ const DrivingEventClassifier: React.FC = () => {
 			console.log("Model input names:", session.inputNames);
 			console.log("Model output names:", session.outputNames);
 
-			// Prepare single input tensor for all features
-			const inputTensor = new Float32Array(normalizedFeatures);
-			const feeds: Record<string, any> = {
-				input: {
+			// Prepare input tensors for each feature
+			const feeds: Record<string, any> = {};
+			const featureNames = [
+				"acc_x",
+				"acc_y",
+				"acc_z",
+				"gyro_x",
+				"gyro_y",
+				"gyro_z",
+				"mag_x",
+				"mag_y",
+				"mag_z",
+				"AccMag",
+				"GyroMag",
+				"MagMag",
+			];
+
+			featureNames.forEach((featureName, index) => {
+				const inputTensor = new Float32Array([
+					normalizedFeatures[index],
+				]);
+				feeds[featureName] = {
 					data: inputTensor,
-					dims: [1, normalizedFeatures.length],
-				},
-			};
+					dims: [1, 1],
+				};
+				console.log(`Input ${featureName}:`, normalizedFeatures[index]);
+			});
 
 			// Add validation for NaN or infinite values
-			const hasInvalidValues = normalizedFeatures.some(
-				(val) => isNaN(val) || !isFinite(val)
-			);
+			const hasInvalidValues = Object.values(feeds).some((feed) => {
+				const data = feed.data as Float32Array;
+				return data.some((val) => isNaN(val) || !isFinite(val));
+			});
 
 			if (hasInvalidValues) {
-				console.error("Invalid values detected in features");
+				console.error("Invalid values detected in feeds");
 				return;
 			}
 
-			console.log("Input tensor shape:", [1, normalizedFeatures.length]);
-			console.log("Input tensor values:", normalizedFeatures);
+			console.log("Feeds object:", Object.keys(feeds));
 			const results = await session.run(feeds);
 			console.log("Model results keys:", Object.keys(results));
 
