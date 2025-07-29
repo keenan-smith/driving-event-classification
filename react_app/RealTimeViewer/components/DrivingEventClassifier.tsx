@@ -86,7 +86,20 @@ const DrivingEventClassifier: React.FC = () => {
 				);
 				setSession(inferenceSession);
 
-				console.log("Model and scaler parameters loaded successfully");
+				console.log("Model loaded successfully");
+				console.log("Model input names:", inferenceSession.inputNames);
+				console.log(
+					"Model output names:",
+					inferenceSession.outputNames
+				);
+				console.log(
+					"Model input shapes:",
+					inferenceSession.inputNames.map((name) =>
+						inferenceSession.inputNames.includes(name)
+							? "present"
+							: "missing"
+					)
+				);
 			} catch (error) {
 				console.error("Error loading model:", error);
 				console.error("Error details:", JSON.stringify(error, null, 2));
@@ -167,41 +180,52 @@ const DrivingEventClassifier: React.FC = () => {
 				magMag,
 			];
 
+			console.log("Raw features:", features);
+			console.log(
+				"Feature names from scaler:",
+				scalerParams?.feature_names
+			);
+
 			// Normalize features
 			const normalizedFeatures = normalizeFeatures(features);
+			console.log("Normalized features:", normalizedFeatures);
 
-			// Prepare input tensors for each feature
-			const feeds: Record<string, any> = {};
-			const featureNames = [
-				"acc_x",
-				"acc_y",
-				"acc_z",
-				"gyro_x",
-				"gyro_y",
-				"gyro_z",
-				"mag_x",
-				"mag_y",
-				"mag_z",
-				"AccMag",
-				"GyroMag",
-				"MagMag",
-			];
+			// Check what inputs the model expects
+			console.log("Model input names:", session.inputNames);
+			console.log("Model output names:", session.outputNames);
 
-			featureNames.forEach((featureName, index) => {
-				const inputTensor = new Float32Array([
-					normalizedFeatures[index],
-				]);
-				feeds[featureName] = {
+			// Prepare single input tensor for all features
+			const inputTensor = new Float32Array(normalizedFeatures);
+			const feeds: Record<string, any> = {
+				input: {
 					data: inputTensor,
-					dims: [1, 1],
-				};
-			});
+					dims: [1, normalizedFeatures.length],
+				},
+			};
 
+			// Add validation for NaN or infinite values
+			const hasInvalidValues = normalizedFeatures.some(
+				(val) => isNaN(val) || !isFinite(val)
+			);
+
+			if (hasInvalidValues) {
+				console.error("Invalid values detected in features");
+				return;
+			}
+
+			console.log("Input tensor shape:", [1, normalizedFeatures.length]);
+			console.log("Input tensor values:", normalizedFeatures);
 			const results = await session.run(feeds);
-			const output = results[session.outputNames[0]];
+			console.log("Model results keys:", Object.keys(results));
+
+			// Get the probability output
+			const output = results["output_probability"];
+			console.log("Output shape:", output.dims);
+			console.log("Output data type:", typeof output.data);
 
 			// Get prediction
 			const predictions = Array.from(output.data as Float32Array);
+			console.log("Raw predictions:", predictions);
 			const maxIndex = predictions.indexOf(Math.max(...predictions));
 			const predictedEvent = eventLabels[maxIndex];
 			const confidence = predictions[maxIndex];
@@ -213,6 +237,11 @@ const DrivingEventClassifier: React.FC = () => {
 			});
 		} catch (error) {
 			console.error("Inference error:", error);
+			console.error("Error details:", JSON.stringify(error, null, 2));
+			if (error instanceof Error) {
+				console.error("Error message:", error.message);
+				console.error("Error stack:", error.stack);
+			}
 		}
 	};
 
