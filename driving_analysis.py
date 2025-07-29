@@ -59,25 +59,35 @@ sns.set_theme(style="whitegrid")
 # ## 1. Data Loading and Consolidation
 # 
 # The data is spread across multiple CSV files in a directory. The first step is to load all these files, extract the correct label for each event, and combine them into a single DataFrame.
+# 
 # The format of the data is as follows:
+# 
 # sr_no: Event ID (integer)
+# 
 # timestamp: Timestamp (string)
+# 
 # road_type: Road type (string)
+# 
 # harsh_event: Harsh event (string)
+# 
 # acc_x, acc_y, acc_z: Accelerometer readings (float, m/s^2)
+# 
 # gyro_x, gyro_y, gyro_z: Gyroscope readings (float, rad/s)
+# 
 # mag_x, mag_y, mag_z: Magnetometer readings (float, μT)
+# 
 # event_class: Event class (integer, binary flag) - 0 = safe, 1 = harsh
 # 
+# 
 # **Label Mapping Strategy:**
-# The `harsh_event` column contains detailed labels (e.g., `sudden-left-line-chg`, `cons-acc-20`). We will map these into our five target classes:
+# The `harsh_event` column contains detailed labels (e.g., `sudden-left-line-chg`, `cons-acc-20`). I will map these into our five target classes:
 # 1.  `Safe Driving`
 # 2.  `Sudden Acceleration`
 # 3.  `Sudden Braking`
 # 4.  `Sudden Lane Change` (combining left and right)
 # 5.  `Sudden Turn` (combining left and right)
 # 
-# We will iterate through all CSV files, read them, apply the label mapping, and concatenate them.
+# I will iterate through all CSV files, read them, apply the label mapping, and concatenate them.
 
 # %%
 def load_and_label_data(data_directory):
@@ -137,23 +147,22 @@ else:
 # %% [markdown]
 # ## 2. Data Cleaning and Preprocessing
 # 
-# Now that the data is consolidated, we'll clean it up.
+# Now that the data is consolidated, I'll clean it up.
 # 
 # Prefix: There is more data cleaning and preprocessing that occurs in the loading_and_labeling function.
-# 1.  **Drop Unnecessary Columns:** `sr_no`, `timestamp`, `harsh_event`, and `event_class` are not needed for modeling. `sr_no` is an index, `timestamp` is not used in this static model, `harsh_event` has been replaced by our clean `event` column, and `event_class` would be used for time-series models.
-# 2.  **Handle Categorical Data:** The `road_type` feature is categorical ('paved'). We will use One-Hot Encoding to convert it into a numerical format that the model can use.
-# 3.  **Check for Missing Values:** We'll inspect the data for any missing values and decide on an imputation strategy if any are found. Given the nature of sensor data, median imputation remains a robust choice.
+# 1.  **Drop Unnecessary Columns:** `sr_no`, `timestamp`, `harsh_event`, and `event_class` are not needed for modeling. `sr_no` is an index, `timestamp` is not used in this static model, `harsh_event` has been replaced by our clean `event` column, and `event_class` would be used for time-series models. `road_type` would be useful, but for all of our data it is of type `paved`.
+# 3.  **Check for Missing Values:** I'll inspect the data for any missing values and decide on an imputation strategy if any are found. Given the nature of sensor data, median imputation remains a robust choice.
 
 # %%
 if not df.empty:
     # Drop columns that are not useful for modeling
-    df_cleaned = df.drop(columns=['sr_no', 'timestamp', 'harsh_event', 'event_class'], errors='ignore')
+    df_cleaned = df.drop(columns=['sr_no', 'timestamp', 'harsh_event', 'event_class', 'road_type'], errors='ignore')
 
     # Check for missing values
     print("\nMissing values per column:")
     print(df_cleaned.isnull().sum())
     
-    # If there were missing values, we would impute them here:
+    # If there were missing values, I would impute them here:
     # df_cleaned = df_cleaned.fillna(df_cleaned.median(numeric_only=True))
 
     print("\nData after dropping columns:")
@@ -164,7 +173,7 @@ if not df.empty:
 # %% [markdown]
 # ## 3. Feature Engineering
 # 
-# To create more powerful, orientation-independent features, we will compute the vector magnitudes for the accelerometer, gyroscope, and magnetometer readings.
+# To create more powerful, orientation-independent features, I will compute the vector magnitudes for the accelerometer, gyroscope, and magnetometer readings.
 # 
 # * `AccMag` = $\sqrt{acc\_x^2 + acc\_y^2 + acc\_z^2}$
 # * `GyroMag` = $\sqrt{gyro\_x^2 + gyro\_y^2 + gyro\_z^2}$
@@ -185,7 +194,7 @@ if not df.empty:
 # %% [markdown]
 # ## 4. Exploratory Data Analysis (EDA)
 # 
-# With the cleaned and engineered data, we can now explore its characteristics.
+# With the cleaned and engineered data, I can now explore its characteristics.
 # 
 # #### Class Distribution
 # A bar chart shows the number of samples for each event type. This is crucial for identifying any class imbalance, which can affect model training and evaluation.
@@ -202,7 +211,7 @@ if not df.empty:
 # %% [markdown]
 # #### Feature Behavior Across Classes
 # 
-# Boxplots allow us to see how the distributions of our key engineered features (`AccMag`, `GyroMag`) vary across the different driving events. We expect to see distinct patterns; for example, `Sudden Braking` and `Sudden Acceleration` should have high `AccMag` values, while `Sudden Turn` should have high `GyroMag` values.
+# Boxplots allow us to see how the distributions of our key engineered features (`AccMag`, `GyroMag`) vary across the different driving events. I expect to see distinct patterns; for example, `Sudden Braking` and `Sudden Acceleration` should have high `AccMag` values, while `Sudden Turn` should have high `GyroMag` values.
 
 # %%
 if not df.empty:
@@ -241,9 +250,9 @@ if not df.empty:
 # ## 5. Modeling
 # 
 # #### Preprocessing Pipeline and Data Splitting
-# We will define our feature set `X` and target `y`. Then, we'll split the data into training (80%) and testing (20%) sets. We use `stratify=y` to ensure the class proportions are maintained in both splits.
+# I will define our feature set `X` and target `y`. Then, I'll split the data into training (80%) and testing (20%) sets. I use `stratify=y` to ensure the class proportions are maintained in both splits.
 # 
-# We create a `ColumnTransformer` to apply different preprocessing steps to different columns:
+# I create a `ColumnTransformer` to apply different preprocessing steps to different columns:
 # - **Numerical Features:** Will be scaled using `StandardScaler`.
 # - **Categorical Features:** Will be transformed using `OneHotEncoder`.
 
@@ -278,13 +287,13 @@ if not df.empty:
 # %% [markdown]
 # #### Model Training and Evaluation
 # 
-# We will evaluate three models. Each model will be part of a `Pipeline` that first applies our preprocessor and then fits the model. This ensures that the same transformations are consistently applied.
+# I will evaluate three models. Each model will be part of a `Pipeline` that first applies our preprocessor and then fits the model. This ensures that the same transformations are consistently applied.
 # 
 # * **Logistic Regression:** A strong linear baseline.
 # * **Random Forest:** A powerful, non-linear ensemble model.
 # * **Gradient Boosting:** Another top-performing ensemble model that often yields high accuracy.
 # 
-# We'll evaluate them using cross-validation on the training set and then measure final performance on our held-out test set.
+# I'll evaluate them using cross-validation on the training set and then measure final performance on our held-out test set.
 
 # %%
 if not df.empty:
@@ -330,7 +339,7 @@ if not df.empty:
 # 
 # #### Performance Comparison
 # 
-# The table below summarizes the performance of all evaluated models. We focus on Test Accuracy and the Macro F1-Score, as the latter is a better metric for multi-class problems, especially if there's an imbalance.
+# The table below summarizes the performance of all evaluated models. I focus on Test Accuracy and the Macro F1-Score, as the latter is a better metric for multi-class problems, especially if there's an imbalance.
 
 # %%
 if not df.empty:
@@ -380,7 +389,7 @@ if not df.empty:
 # ## 7. Discussion & Conclusion
 # 
 # ### Project Summary
-# This project successfully demonstrated a complete workflow for classifying complex driving events from raw sensor data. We began by consolidating data from numerous files, performing cleaning and feature engineering, and conducting a thorough exploratory data analysis. We then built, trained, and evaluated three distinct classification models, with the **Random Forest** emerging as the most effective.
+# This project successfully demonstrated a complete workflow for classifying complex driving events from raw sensor data. I began by consolidating data from numerous files, performing cleaning and feature engineering, and conducting a thorough exploratory data analysis. I then built, trained, and evaluated three distinct classification models, with the **Random Forest** emerging as the most effective.
 # 
 # ### Key Findings & Takeaways
 # * **Data Consolidation is Key:** The initial step of mapping messy labels to clean, unified classes was fundamental to the project's success. Consolidating all safe driving events into a single class created a more robust and focused classification problem.
@@ -390,7 +399,7 @@ if not df.empty:
 # 
 # ### Limitations & Future Work
 # 1.  **Temporal Windowing:** The current model classifies each sensor reading independently. A major improvement would be to use a **sliding window** approach to create features from a sequence of data points (e.g., mean, std, min, max of `AccMag` over 2 seconds). This would provide temporal context and likely improve accuracy, especially for distinguishing between similar events like turns and lane changes.
-# 2.  **Hyperparameter Optimization:** To further boost performance, we could implement `GridSearchCV` or `RandomizedSearchCV` to find the optimal hyperparameters for our best-performing model.
+# 2.  **Hyperparameter Optimization:** To further boost performance, I could implement `GridSearchCV` or `RandomizedSearchCV` to find the optimal hyperparameters for our best-performing model.
 # 3.  **Real-World Generalization:** The model should be tested on data from a wider variety of road types, weather conditions, and phone placements to ensure it generalizes well to real-world scenarios.
 
 # %% [markdown]
@@ -421,10 +430,11 @@ with open('scaler_params.json', 'w') as f:
 print("Scaler parameters saved to scaler_params.json")
 
 # --- 2. Export the Model to ONNX (Single Tensor Input) ---
-# Create a single input tensor with all features
-initial_types = [('input', FloatTensorType([None, len(X_train.columns)]))]
+# Create input types that match the expected column names
+feature_names = X_train.columns.tolist()
+initial_types = [(name, FloatTensorType([None, 1])) for name in feature_names]
 
-# Now, the converter knows how to map the single input to the pipeline steps
+# Now, the converter knows how to map the input columns to the pipeline steps
 onnx_model = skl2onnx.convert_sklearn(
     best_pipeline,
     initial_types=initial_types
@@ -435,4 +445,6 @@ with open("driving_model.onnx", "wb") as f:
     f.write(onnx_model.SerializeToString())
 
 print("Model exported successfully to driving_model.onnx")
-print(f"Model expects input tensor with {len(X_train.columns)} features")
+print(f"Model expects {len(feature_names)} input features: {feature_names}")
+
+
