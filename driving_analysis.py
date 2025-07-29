@@ -403,9 +403,9 @@ if not df.empty:
 # and 'X_train' is your training data DataFrame.
 import json
 import skl2onnx
-from skl2onnx.common.data_types import FloatTensorType
+from skl2onnx.common.data_types import FloatTensorType, StringTensorType
 
-# --- 1. Export the Scaler Parameters ---
+# --- 1. Export the Scaler Parameters (No change here) ---
 preprocessor = best_pipeline.named_steps['preprocessor']
 numerical_features = X_train.select_dtypes(include=np.number).columns.tolist()
 numeric_transformer = preprocessor.named_transformers_['num']
@@ -420,11 +420,16 @@ with open('scaler_params.json', 'w') as f:
     json.dump(scaler_params, f)
 print("Scaler parameters saved to scaler_params.json")
 
-# --- 2. Export the Model to ONNX (Simplified Approach) ---
-# Create a single input type for all features
-initial_types = [('input', FloatTensorType([None, len(numerical_features)]))]
+# --- 2. Export the Model to ONNX (Corrected Section) ---
+# Create an input type for each column in the training data
+initial_types = []
+for col in X_train.columns:
+    if X_train[col].dtype in ['float64', 'float32', 'int64']:
+        initial_types.append((col, FloatTensorType([None, 1])))
+    elif X_train[col].dtype == 'object':
+        initial_types.append((col, StringTensorType([None, 1])))
 
-# Convert the pipeline to ONNX
+# Now, the converter knows how to map each input to the pipeline steps
 onnx_model = skl2onnx.convert_sklearn(
     best_pipeline,
     initial_types=initial_types
@@ -435,4 +440,3 @@ with open("driving_model.onnx", "wb") as f:
     f.write(onnx_model.SerializeToString())
 
 print("Model exported successfully to driving_model.onnx")
-print(f"Model expects input shape: [batch_size, {len(numerical_features)}]")
