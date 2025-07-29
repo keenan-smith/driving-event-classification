@@ -35,6 +35,9 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import json
+import skl2onnx
+from skl2onnx.common.data_types import FloatTensorType
 
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold
@@ -390,7 +393,52 @@ if not df.empty:
 # 2.  **Hyperparameter Optimization:** To further boost performance, we could implement `GridSearchCV` or `RandomizedSearchCV` to find the optimal hyperparameters for our best-performing model.
 # 3.  **Real-World Generalization:** The model should be tested on data from a wider variety of road types, weather conditions, and phone placements to ensure it generalizes well to real-world scenarios.
 
-# %%
+# %% [markdown]
+# ## 8. Mobile App
+# 
+# This section is dedicated to exporting the model, so that it can be used in the React Native mobile app.
 
+# %%
+# Assuming 'best_pipeline' is your fitted RandomForest pipeline
+# and 'X_train' is your training data DataFrame.
+import json
+import skl2onnx
+from skl2onnx.common.data_types import FloatTensorType, StringTensorType
+
+# --- 1. Export the Scaler Parameters (No change here) ---
+preprocessor = best_pipeline.named_steps['preprocessor']
+numerical_features = X_train.select_dtypes(include=np.number).columns.tolist()
+numeric_transformer = preprocessor.named_transformers_['num']
+
+scaler_params = {
+    'mean': numeric_transformer.mean_.tolist(),
+    'scale': numeric_transformer.scale_.tolist(),
+    'feature_names': numerical_features
+}
+
+with open('scaler_params.json', 'w') as f:
+    json.dump(scaler_params, f)
+print("Scaler parameters saved to scaler_params.json")
+
+# --- 2. Export the Model to ONNX (Corrected Section) ---
+# Create an input type for each column in the training data
+initial_types = []
+for col in X_train.columns:
+    if X_train[col].dtype in ['float64', 'float32', 'int64']:
+        initial_types.append((col, FloatTensorType([None, 1])))
+    elif X_train[col].dtype == 'object':
+        initial_types.append((col, StringTensorType([None, 1])))
+
+# Now, the converter knows how to map each input to the pipeline steps
+onnx_model = skl2onnx.convert_sklearn(
+    best_pipeline,
+    initial_types=initial_types
+)
+
+# Save the ONNX model
+with open("driving_model.onnx", "wb") as f:
+    f.write(onnx_model.SerializeToString())
+
+print("Model exported successfully to driving_model.onnx")
 
 
